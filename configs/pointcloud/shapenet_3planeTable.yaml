@@ -1,7 +1,7 @@
 method: conv_onet
 data:
   input_type: pointcloud
-  classes: null
+  classes: ['04379243']
   path: data/ShapeNet
   pointcloud_n: 3000
   pointcloud_noise: 0.0
@@ -26,7 +26,7 @@ model:
     hidden_size: 32
   c_dim: 32
 training:
-  out_dir: out/pointcloud/shapenet_3plane
+  out_dir: out/pointcloud/shapenet_3planeTable
   batch_size: 32
   model_selection_metric: iou
   model_selection_mode: maximize

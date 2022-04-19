@@ -1,7 +1,7 @@
 method: conv_onet
 data:
   input_type: pointcloud
-  classes: null
+  classes: ['04379243']
   path: data/ShapeNet
   pointcloud_n: 3000
   pointcloud_noise: 0.0
@@ -26,22 +26,23 @@ model:
     hidden_size: 32
   c_dim: 32
 training:
-  out_dir: out/pointcloud/shapenet_3plane
+  out_dir: out/pointcloud/grid
   batch_size: 32
   model_selection_metric: iou
   model_selection_mode: maximize
-  print_every: 1000
-  visualize_every: 10000
-  validate_every: 10000
-  checkpoint_every: 2000
-  backup_every: 10000
+  print_every: 100
+  visualize_every: 200
+  validate_every: 4000
+  checkpoint_every: 200
+  backup_every: 4000
   n_workers: 8
   n_workers_val: 4
+  loss: dsm
 test:
   threshold: 0.2
   eval_mesh: true
   eval_pointcloud: false
-  model_file: model_best.pt
+  model_file: model_5600.pt
 generation:
   vis_n_outputs: 2
   refine: false

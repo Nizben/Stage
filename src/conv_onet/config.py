@@ -3,7 +3,7 @@ import torch.distributions as dist
 from torch import nn
 import os
 from src.encoder import encoder_dict
-from src.conv_onet import models, training
+from src.conv_onet import models, training, trainingtest
 from src.conv_onet import generation
 from src import data
 from src import config
@@ -95,14 +95,25 @@ def get_trainer(model, optimizer, cfg, device, **kwargs):
     out_dir = cfg['training']['out_dir']
     vis_dir = os.path.join(out_dir, 'vis')
     input_type = cfg['data']['input_type']
-
-    trainer = training.Trainer(
+    trainer_type = cfg['training'].get('loss', None)
+    
+    if trainer_type=="dsm":
+        trainer = trainingtest.TrainerS(
+        model, optimizer,
+        device=device, input_type=input_type,
+        vis_dir=vis_dir, threshold=threshold,
+        eval_sample=cfg['training']['eval_sample'],
+    )
+    else:
+        trainer = training.Trainer(
         model, optimizer,
         device=device, input_type=input_type,
         vis_dir=vis_dir, threshold=threshold,
         eval_sample=cfg['training']['eval_sample'],
     )
 
+        
+    
     return trainer
 
 

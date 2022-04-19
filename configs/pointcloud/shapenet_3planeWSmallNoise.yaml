@@ -4,7 +4,7 @@ data:
   classes: null
   path: data/ShapeNet
   pointcloud_n: 3000
-  pointcloud_noise: 0.0
+  pointcloud_noise: 0.005
   points_subsample: 2048
   points_file: points.npz
   points_iou_file: points.npz
@@ -26,7 +26,7 @@ model:
     hidden_size: 32
   c_dim: 32
 training:
-  out_dir: out/pointcloud/shapenet_3plane
+  out_dir: out/pointcloud/shapenet_3planeWSmallNoise
   batch_size: 32
   model_selection_metric: iou
   model_selection_mode: maximize

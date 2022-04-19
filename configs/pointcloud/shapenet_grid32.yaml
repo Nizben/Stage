@@ -4,8 +4,8 @@ data:
   classes: null
   path: data/ShapeNet
   pointcloud_n: 3000
-  pointcloud_noise: 0.005
-  points_subsample: 2048
+  pointcloud_noise: 0.0
+  points_subsample: 8192
   points_file: points.npz
   points_iou_file: points.npz
   # points_unpackbits: false

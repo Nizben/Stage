@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from src.layers import ResnetBlockFC
 from src.common import normalize_coordinate, normalize_3d_coordinate, map2local
-
+from gridsample import grid_sample_2d
 
 class LocalDecoder(nn.Module):
     ''' Decoder.
@@ -46,13 +46,14 @@ class LocalDecoder(nn.Module):
 
         self.sample_mode = sample_mode
         self.padding = padding
-    
+
 
     def sample_plane_feature(self, p, c, plane='xz'):
         xy = normalize_coordinate(p.clone(), plane=plane, padding=self.padding) # normalize to the range of (0, 1)
         xy = xy[:, :, None].float()
         vgrid = 2.0 * xy - 1.0 # normalize to (-1, 1)
-        c = F.grid_sample(c, vgrid, padding_mode='border', align_corners=True, mode=self.sample_mode).squeeze(-1)
+        
+        c = grid_sample_2d(c, vgrid).squeeze(-1)
         return c
 
     def sample_grid_feature(self, p, c):
@@ -60,7 +61,7 @@ class LocalDecoder(nn.Module):
         p_nor = p_nor[:, :, None, None].float()
         vgrid = 2.0 * p_nor - 1.0 # normalize to (-1, 1)
         # acutally trilinear interpolation if mode = 'bilinear'
-        c = F.grid_sample(c, vgrid, padding_mode='border', align_corners=True, mode=self.sample_mode).squeeze(-1).squeeze(-1)
+        c = grid_sample_2d(c, vgrid).squeeze(-1).squeeze(-1)
         return c
 
 
@@ -144,16 +145,16 @@ class PatchLocalDecoder(nn.Module):
             self.fc_p = nn.Linear(60, hidden_size)
         else:
             self.fc_p = nn.Linear(dim, hidden_size)
-    
+
     def sample_feature(self, xy, c, fea_type='2d'):
         if fea_type == '2d':
             xy = xy[:, :, None].float()
             vgrid = 2.0 * xy - 1.0 # normalize to (-1, 1)
-            c = F.grid_sample(c, vgrid, padding_mode='border', align_corners=True, mode=self.sample_mode).squeeze(-1)
+            c = grid_sample_2d(c, vgrid).squeeze(-1)
         else:
             xy = xy[:, :, None, None].float()
             vgrid = 2.0 * xy - 1.0 # normalize to (-1, 1)
-            c = F.grid_sample(c, vgrid, padding_mode='border', align_corners=True, mode=self.sample_mode).squeeze(-1).squeeze(-1)
+            c = grid_sample_2d(c, vgrid).squeeze(-1).squeeze(-1)
         return c
 
     def forward(self, p, c_plane, **kwargs):
@@ -176,7 +177,7 @@ class PatchLocalDecoder(nn.Module):
         p = p.float()
         if self.map2local:
             p = self.map2local(p)
-        
+
         net = self.fc_p(p)
         for i in range(self.n_blocks):
             if self.c_dim != 0:
