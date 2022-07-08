@@ -9,4 +9,4 @@ grid = torch.stack((meshy, meshx), 2)
 grid = grid.unsqueeze(0) # add batch dim
 
 output = torch.nn.functional.grid_sample(input, grid)
-print(output)
+print(output) 

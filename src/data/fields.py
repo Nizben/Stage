@@ -7,7 +7,10 @@ import trimesh
 from src.data.core import Field
 from src.utils import binvox_rw
 from src.common import coord2index, normalize_coord
-
+#from src.utils.libkdtree import KDTree
+#from scipy.spatial import cKDTree as KDTree
+import pickle
+from sklearn.neighbors import KDTree 
 
 class IndexField(Field):
     ''' Basic index field.'''
@@ -136,6 +139,9 @@ class PointsField(Field):
             points += 1e-4 * np.random.randn(*points.shape)
 
         occupancies = points_dict['occupancies']
+        distances = points_dict['dist'].astype(np.float32)
+        closest_points = points_dict['closest_points'].astype(np.float32)
+
         if self.unpackbits:
             occupancies = np.unpackbits(occupancies)[:points.shape[0]]
         occupancies = occupancies.astype(np.float32)
@@ -143,6 +149,8 @@ class PointsField(Field):
         data = {
             None: points,
             'occ': occupancies,
+            'dist': distances,
+            'closest_points': closest_points
         }
 
         if self.transform is not None:
@@ -299,11 +307,13 @@ class PointCloudField(Field):
         pointcloud_dict = np.load(file_path)
 
         points = pointcloud_dict['points'].astype(np.float32)
+        #kdtree = KDTree(points)
         normals = pointcloud_dict['normals'].astype(np.float32)
         
         data = {
             None: points,
             'normals': normals,
+            'kdtree_points': points,
         }
 
         if self.transform is not None:

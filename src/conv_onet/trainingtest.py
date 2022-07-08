@@ -1,6 +1,7 @@
 import os
 from tqdm import trange
 import torch
+from torch._vmap_internals import vmap
 from torch.nn import functional as F
 from torch import distributions as dist
 from src.common import (
@@ -8,6 +9,8 @@ from src.common import (
 )
 from src.utils import visualize as vis
 from src.training import BaseTrainer
+from numpy import sqrt
+
 
 class Trainer(BaseTrainer):
     ''' Trainer object for the Occupancy Network.
@@ -49,6 +52,7 @@ class Trainer(BaseTrainer):
         self.optimizer.step()
 
         return loss.item()
+
     
     def eval_step(self, data):
         ''' Performs an evaluation step.
@@ -146,15 +150,8 @@ class TrainerS(Trainer):
      ''' Computes the score matching paper loss
 
         '''
+     def jacobian_func(self, p, c):
         
-     def compute_loss(self, data):
-        
-        device = self.device
-        p = data.get('points').to(device)
-        occ = data.get('points.occ').to(device)
-        inputs = data.get('inputs', torch.empty(p.size(0), 0)).to(device)
-
-        c = self.model.encode_inputs(inputs)
         kwargs = {}
         x = p[...,0].unsqueeze(-1); x.requires_grad_(True)
         y = p[...,1].unsqueeze(-1); y.requires_grad_(True)
@@ -162,19 +159,91 @@ class TrainerS(Trainer):
         p = torch.cat([x,y,z], -1)
         logits = self.model.decode(p, c, **kwargs).logits
 
-        pdx = torch.autograd.grad(logits.sum(), x, create_graph=True)[0]
-        pdy = torch.autograd.grad(logits.sum(), y, create_graph=True)[0]
-        pdz = torch.autograd.grad(logits.sum(), z, create_graph=True)[0]
+        jacobian_row_0 = torch.cat([torch.autograd.grad(logits[..., 0].sum(), i, retain_graph=True)[0] for i in [x,y,z]], dim = -1)
+        jacobian_row_1 = torch.cat([torch.autograd.grad(logits[..., 1].sum(), i, retain_graph=True)[0] for i in [x,y,z]], dim = -1)
+        jacobian_row_2 = torch.cat([torch.autograd.grad(logits[..., 2].sum(), i, retain_graph=True)[0] for i in [x,y,z]], dim = -1)
+        #print(jacobian_row_0.size())
+        jacobian = torch.stack((jacobian_row_0, jacobian_row_1, jacobian_row_2), dim=-1)
+
+        return jacobian, logits
+
+     def metropolis_step(self, points, score, z_t, alpha=10e-4):
+        points_k1 = points + (alpha/2)*score + sqrt(alpha)*z_t
+        return points_k1
+
+    
 
 
-        loss = 0.5*torch.norm(pdx + pdy + pdz + 0.5*torch.norm(logits)**2, dim=-1) ** 2
-        loss = loss.mean() 
+     def compute_loss(self, data):
+        
+        device = self.device
+        p = data.get('inputs').to(device)
+        closest_points = data.get('points.closest_points').to(device)
+        occ = data.get('points.occ').to(device)
+        inputs = data.get('inputs', torch.empty(p.size(0), 0)).to(device)
+        points = data.get('points').to(device)
+        distances = data.get('points.dist').to(device)
 
-        return loss
+        c = self.model.encode_inputs(inputs)
+        
+        #print(jacobian.size())
+        #pdx = torch.autograd.grad(logits[..., 0].sum(), x, create_graph=True)[0]
+        #print(pdx.size())
+        jacobian_inputs, logits = self.jacobian_func(p, c)
+        #print(logits.shape)
+
+        loss_gradient = jacobian_inputs[:, :, 0, 0] + jacobian_inputs[: ,: ,1 ,1] + jacobian_inputs[: ,: ,2 ,2]
+        loss_norm = 0.5*torch.norm(logits, dim=-1)**2
+        #inputs_curl = torch.stack((jacobian_inputs[:,:,2,1] - jacobian_inputs[:,:,1,2], jacobian_inputs[:,:,0,2]-jacobian_inputs[:,:,2,0], jacobian_inputs[:,:,1,0] - jacobian_inputs[:,:,0,1]), dim=-1)
+
+        jacobian_points, score = self.jacobian_func(points, c)
 
 
+        points_curl = torch.stack((jacobian_points[:,:,2,1] - jacobian_points[:,:,1,2], jacobian_points[:,:,0,2]-jacobian_points[:,:,2,0], jacobian_points[:,:,1,0] - jacobian_points[:,:,0,1]), dim=-1)
+        difference_vector = closest_points - points
+        #batched_dot = (difference_vector*logits).sum(dim=-1)
+        #max_dot_product = torch.relu(-batched_dot)
+        #print(batched_dot.shape) 
 
-def ascent(p, model, num_steps):
-    for t in range(num_steps):
-        p += alpha*model(p)/2 + torch.randn(p.shape)*torch.sqrt(alpha)
-        return p 
+
+        # metropolis loss
+        sigma = 10
+        z_t = torch.randn_like(score)
+        alpha = 1e-3
+        points_k1 = self.metropolis_step(points, score, z_t, alpha)
+
+
+        d_k = distances**2
+        d_k1 = torch.cdist(points_k1, inputs).topk(1).values.pow(2).squeeze(-1)
+        q_0 = -torch.norm(alpha*score + sqrt(alpha)*z_t, dim=-1)/(2*alpha)
+        q_1 = -torch.norm(sqrt(alpha)*z_t, dim=-1)/(2*alpha)
+        #print(d_k.shape)
+        #print(d_k1.shape)
+        #print(q_0.shape)
+        #print(q_1.shape)
+        terme = torch.exp((d_k-d_k1)/sigma +q_0-q_1)
+        ratio = torch.relu(1-terme)
+       
+        #upper = torch.exp((-1/2*alpha)*torch.norm(alpha*))
+        #d_k1 = torch.cat([data['inputs.kdtree'][i].query(x)[0] for i, x in enumerate(points_k1)])
+
+        loss = loss_norm + loss_gradient #+ torch.norm(inputs_curl, dim=-1)
+        loss = loss.mean() + ratio.mean()  #+ 0.1*torch.norm(points_curl, dim=-1).mean() + max_dot_product.mean()
+
+        return loss, loss_norm.mean(), loss_gradient.mean(), ratio.mean() #, torch.norm(inputs_curl, dim=-1).mean()
+    
+
+     def train_step(self, data):
+        ''' Performs a training step.
+
+        Args:
+            data (dict): data dictionary
+        '''
+        self.model.train()
+        self.optimizer.zero_grad()
+        loss = self.compute_loss(data)
+        loss[0].backward()
+        self.optimizer.step()
+
+        return loss[0].item(), loss[1].item(), loss[2].item(), loss[3].item()
+           

@@ -74,13 +74,17 @@ class SubsamplePoints(object):
         '''
         points = data[None]
         occ = data['occ']
-
+        closest_points = data['closest_points']
+        dist = data['dist']
+        
         data_out = data.copy()
         if isinstance(self.N, int):
             idx = np.random.randint(points.shape[0], size=self.N)
             data_out.update({
                 None: points[idx, :],
-                'occ':  occ[idx],
+                'closest_points': closest_points[idx, :],
+                'dist': dist[idx],
+                'occ':  occ[idx]
             })
         else:
             Nt_out, Nt_in = self.N

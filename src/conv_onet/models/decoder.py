@@ -20,10 +20,11 @@ class LocalDecoder(nn.Module):
     '''
 
     def __init__(self, dim=3, c_dim=128,
-                 hidden_size=256, n_blocks=5, leaky=False, sample_mode='bilinear', padding=0.1):
+                 hidden_size=256, n_blocks=5, leaky=False, sample_mode='bilinear', padding=0.1, output_dim = 1):
         super().__init__()
         self.c_dim = c_dim
         self.n_blocks = n_blocks
+        self.output_dim = output_dim
 
         if c_dim != 0:
             self.fc_c = nn.ModuleList([
@@ -37,7 +38,7 @@ class LocalDecoder(nn.Module):
             ResnetBlockFC(hidden_size) for i in range(n_blocks)
         ])
 
-        self.fc_out = nn.Linear(hidden_size, 1)
+        self.fc_out = nn.Linear(hidden_size, self.output_dim)
 
         if not leaky:
             self.actvn = F.relu

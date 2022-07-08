@@ -3,10 +3,10 @@ data:
   input_type: pointcloud
   classes: ['04379243']
   path: data/ShapeNet
-  pointcloud_n: 3000
+  pointcloud_n: 5000 #ex 3000 surface points
   pointcloud_noise: 0.0
   points_subsample: 2048
-  points_file: points.npz
+  points_file: points_distance.npz
   points_iou_file: points.npz
   voxels_file: null
 model:
@@ -24,6 +24,7 @@ model:
   decoder_kwargs:
     sample_mode: bilinear # bilinear / nearest
     hidden_size: 32
+    output_dim: 3
   c_dim: 32
 training:
   out_dir: out/pointcloud/grid
